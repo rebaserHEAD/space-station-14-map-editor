@@ -34,8 +34,7 @@ describe('multi-grid roundtrip on real maps', () => {
     expect(totalEntities).toBeGreaterThan(0);
 
     // Semantic roundtrip: tile types and entity counts must match.
-    // Tile variants are reset to 0 on export (editor has no variant editing),
-    // so byte-exact comparison is not possible.
+    // Tile variants/flags/rotationMirroring are preserved verbatim on export.
     const exported = exportMap(map);
     const reimported = importMap(exported);
 

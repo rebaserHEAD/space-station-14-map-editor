@@ -43,10 +43,16 @@ export interface ImportedMap {
   gridUid: number;
   /** The uid of the map entity (usually 1) */
   mapUid: number;
-  /** Top-level maps array (format 7+) */
+  /** Top-level maps array (format 7+). Empty for grid files (saved ships/POIs). */
   maps?: number[];
   /** Top-level grids array (format 7+) */
   grids?: number[];
+  /** Top-level orphans array (format 7+). Grid files register their grid here. */
+  orphans?: number[];
+  /** Top-level nullspace array (format 7+) */
+  nullspace?: number[];
+  /** Leading comment/blank lines before the first YAML key (SPDX headers, author notes) */
+  leadingLines?: string[];
   /** Structural entity components preserved verbatim for roundtrip */
   structuralEntityData?: Record<number, Record<string, unknown>[]>;
   /** Original chunk key ordering for roundtrip fidelity */
@@ -59,6 +65,8 @@ export interface ImportedMap {
   entityRawPreamble?: Record<number, string[]>;
   /** Whether the original file had a YAML document terminator `...` at the end */
   hasDocumentTerminator?: boolean;
+  /** Whether the original file ended with a newline (false = no trailing newline) */
+  trailingNewline?: boolean;
   /** Original encounter order of non-structural entity UIDs (for byte-exact roundtrip) */
   entityOrder?: number[];
   /** Per-grid data for multi-grid support */
@@ -120,9 +128,25 @@ export function importMap(yamlContent: string): ImportedMap {
     };
   });
 
-  // Preserve format 7+ top-level keys
-  const maps: number[] | undefined = Array.isArray(doc.maps) ? doc.maps : undefined;
-  const grids: number[] | undefined = Array.isArray(doc.grids) ? doc.grids : undefined;
+  // Preserve format 7+ top-level keys. A bare `key:` parses as null; treat it
+  // as an explicit empty list so grid files (maps: []) round-trip faithfully.
+  const uidList = (v: unknown): number[] | undefined =>
+    Array.isArray(v) ? v : v === null ? [] : undefined;
+  const maps = 'maps' in doc ? uidList(doc.maps) : undefined;
+  const grids = 'grids' in doc ? uidList(doc.grids) : undefined;
+  const orphans = 'orphans' in doc ? uidList(doc.orphans) : undefined;
+  const nullspace = 'nullspace' in doc ? uidList(doc.nullspace) : undefined;
+
+  // Preserve leading comment/blank lines (SPDX license headers, author notes).
+  // Everything before the first non-comment, non-blank line is passthrough.
+  const leadingLines: string[] = [];
+  for (const line of yamlContent.split(/\r?\n/)) {
+    if (line.trim() === '' || line.trimStart().startsWith('#')) {
+      leadingLines.push(line);
+    } else {
+      break;
+    }
+  }
 
   // Detect line ending style
   const lineEnding = yamlContent.includes('\r\n') ? '\r\n' : '\n';
@@ -133,7 +157,10 @@ export function importMap(yamlContent: string): ImportedMap {
   // Detect YAML document terminator `...` at end of file
   const hasDocumentTerminator = /^\.\.\.\s*$/m.test(yamlContent.split(/\r?\n/).slice(-3).join('\n'));
 
-  return { meta, tilemap, grid, entities, containedEntities, gridUid, mapUid, maps, grids, structuralEntityData, chunkKeyOrder, lineEnding, entityRawComponents, entityRawPreamble, hasDocumentTerminator, entityOrder, gridDataList };
+  // Whether the file ends with a newline (some game-saved ships end at `...`)
+  const trailingNewline = /\r?\n$/.test(yamlContent);
+
+  return { meta, tilemap, grid, entities, containedEntities, gridUid, mapUid, maps, grids, orphans, nullspace, leadingLines: leadingLines.length > 0 ? leadingLines : undefined, structuralEntityData, chunkKeyOrder, lineEnding, entityRawComponents, entityRawPreamble, hasDocumentTerminator, trailingNewline, entityOrder, gridDataList };
 }
 
 // ---- Meta ----

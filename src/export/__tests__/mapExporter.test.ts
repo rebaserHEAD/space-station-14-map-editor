@@ -459,12 +459,13 @@ entities:
     });
   });
 
-  describe('tile variant sanitization', () => {
-    it('exports all tile variants as 0 to prevent MapRenderer crashes', () => {
+  describe('tile variant preservation', () => {
+    it('preserves imported tile variants through export', () => {
       const map = makeMinimalMap();
-      // Even a "legitimate" variant gets reset to 0 on export, because the editor
-      // has no variant editing capability and stale variants from the paint tool bug
-      // can crash SS14's MapRenderer. The game re-randomizes variants at load time.
+      // The engine assigns variants at placement time only, never on load, so
+      // the exporter must preserve them or floor visuals flatten permanently.
+      // Stale-variant safety lives in the paint tool, which resets variant when
+      // it changes a cell's tile type (see paintTool.ts).
       map.grid.cells[0] = { tileId: 'FloorSteel', variant: 3 };
       map.grid.cells[1] = { tileId: 'FloorSteel', variant: 5 };
 
@@ -472,22 +473,24 @@ entities:
       const reimported = importMap(exported);
 
       expect(reimported.grid.cells[0].tileId).toBe('FloorSteel');
-      expect(reimported.grid.cells[0].variant ?? 0).toBe(0);
+      expect(reimported.grid.cells[0].variant ?? 0).toBe(3);
       expect(reimported.grid.cells[1].tileId).toBe('FloorSteel');
-      expect(reimported.grid.cells[1].variant ?? 0).toBe(0);
+      expect(reimported.grid.cells[1].variant ?? 0).toBe(5);
     });
 
-    it('stale variant from paint-over does not survive export', () => {
+    it('preserves flags and rotationMirroring alongside variants', () => {
       const map = makeMinimalMap();
-      map.tilemap = { 0: 'Space', 1: 'FloorSteel', 2: 'Plating' };
-      // Simulate stale variant: Plating cell with variant 5 (Plating only has 1 variant)
-      map.grid.cells[0] = { tileId: 'Plating', variant: 5 };
+      // rotationMirroring only exists in format 7 chunks (7th byte); format 6
+      // has no slot for it, so this test must run at format 7.
+      map.meta.format = 7;
+      map.grid.cells[0] = { tileId: 'FloorSteel', variant: 2, flags: 1, rotationMirroring: 3 };
 
       const exported = exportMap(map);
       const reimported = importMap(exported);
 
-      expect(reimported.grid.cells[0].tileId).toBe('Plating');
-      expect(reimported.grid.cells[0].variant ?? 0).toBe(0);
+      expect(reimported.grid.cells[0].variant ?? 0).toBe(2);
+      expect(reimported.grid.cells[0].flags ?? 0).toBe(1);
+      expect(reimported.grid.cells[0].rotationMirroring ?? 0).toBe(3);
     });
   });
 });
