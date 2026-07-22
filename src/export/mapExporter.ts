@@ -23,6 +23,18 @@ const TILES_PER_CHUNK = CHUNK_SIZE * CHUNK_SIZE;
 
 // ---- Main entry point ----
 
+/** Emit a top-level uid list, using `key: []` (not a bare key) when empty. */
+function pushUidList(lines: string[], key: string, uids: number[]): void {
+  if (uids.length === 0) {
+    lines.push(`${key}: []`);
+    return;
+  }
+  lines.push(`${key}:`);
+  for (const uid of uids) {
+    lines.push(`- ${uid}`);
+  }
+}
+
 export function exportMap(map: ImportedMap, decalsDirty?: Set<number>): string {
   const format = map.meta.format;
   const { tilemap, reverseTilemap } = buildTilemap(map);
@@ -31,6 +43,12 @@ export function exportMap(map: ImportedMap, decalsDirty?: Set<number>): string {
   const entityGroupsYaml = buildEntityGroupsYaml(map);
 
   const lines: string[] = [];
+
+  // Leading comments (SPDX license headers, author notes) pass through verbatim.
+  // Dropping them from AGPL-licensed maps would strip required attribution.
+  if (map.leadingLines) {
+    lines.push(...map.leadingLines);
+  }
 
   // Meta
   lines.push('meta:');
@@ -53,18 +71,16 @@ export function exportMap(map: ImportedMap, decalsDirty?: Set<number>): string {
     lines.push(`  postmapinit: ${map.meta.postmapinit ? 'true' : 'false'}`);
   }
 
-  // Format 7+ top-level keys
+  // Format 7+ top-level keys. Preserve the imported uid lists verbatim: grid
+  // files (saved ships/POIs) legitimately have `maps: []` with the grid
+  // registered under `orphans:`, and the game's loader relies on that
+  // registration to attach the grid. Fabricating a maps entry or dropping
+  // orphans corrupts every grid-format file.
   if (format >= 7) {
-    lines.push('maps:');
-    for (const uid of (map.maps ?? [map.mapUid])) {
-      lines.push(`- ${uid}`);
-    }
-    lines.push('grids:');
-    for (const uid of (map.grids ?? [map.gridUid])) {
-      lines.push(`- ${uid}`);
-    }
-    lines.push('orphans: []');
-    lines.push('nullspace: []');
+    pushUidList(lines, 'maps', map.maps ?? [map.mapUid]);
+    pushUidList(lines, 'grids', map.grids ?? [map.gridUid]);
+    pushUidList(lines, 'orphans', map.orphans ?? []);
+    pushUidList(lines, 'nullspace', map.nullspace ?? []);
   }
 
   // Tilemap, Space first (index 0), then remaining sorted by name (matching SS14 engine)
@@ -181,7 +197,10 @@ export function exportMap(map: ImportedMap, decalsDirty?: Set<number>): string {
   }
 
   const eol = map.lineEnding === '\r\n' ? '\r\n' : '\n';
-  return lines.join(eol) + eol;
+  // Mirror the original's trailing-newline state (default: newline) so a
+  // no-op roundtrip produces no version-control diff.
+  const trailingEol = map.trailingNewline === false ? '' : eol;
+  return lines.join(eol) + trailingEol;
 }
 
 // ---- Tilemap building ----
@@ -327,15 +346,16 @@ function buildChunksYamlForGrid(
       const ly = ((worldY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
       const localIdx = ly * CHUNK_SIZE + lx;
 
-      // Always export variant as 0. The editor has no variant editing capability,
-      // and preserving imported variants is dangerous: the paint tool bug (now fixed)
-      // could leave stale variants from old tile types that exceed the new tile's
-      // variant count, crashing SS14's MapRenderer. The game engine re-randomizes
-      // tile variants at map load time for tiles that support visual variety.
+      // Preserve imported variants: the engine assigns variants at tile
+      // PLACEMENT time only (TileDefinitionManager.GetVariantTile), never on map
+      // load, so zeroing them would permanently flatten floor visuals. This is
+      // safe because the paint tool resets variant/flags/rotationMirroring
+      // whenever it changes a cell's tile type, so a surviving variant always
+      // belongs to its unchanged imported tile.
       chunks.get(key)![localIdx] = {
         typeId: tileIndex,
         flags: cell.flags ?? 0,
-        variant: 0,
+        variant: cell.variant ?? 0,
         rotationMirroring: cell.rotationMirroring ?? 0,
       };
     }

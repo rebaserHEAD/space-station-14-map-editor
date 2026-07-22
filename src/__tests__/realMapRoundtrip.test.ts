@@ -137,8 +137,7 @@ describe('real map roundtrip', () => {
     const exported = exportMap(original);
     const reimported = importMap(exported);
 
-    // Tile types must match (variants may differ, the editor resets variants to 0
-    // on export since it has no variant editing capability)
+    // Tile types must match (variants are preserved verbatim on export)
     expect(reimported.grid.width).toBe(original.grid.width);
     expect(reimported.grid.height).toBe(original.grid.height);
     for (let i = 0; i < original.grid.cells.length; i++) {
