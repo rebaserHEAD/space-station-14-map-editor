@@ -4,26 +4,28 @@
 
 ### Fork Selection
 
-On first launch, the editor shows a fork selection screen:
+On first launch, GRIMP shows a fork selection screen. Choose **Open Fork Folder** and pick
+your SS14 repository's root directory. The editor scans the `Resources/` folder for
+prototypes and textures, so it reflects whatever fork you point it at (base Space Station
+14 or any fork).
 
-- **Open Fork Folder**, Pick your SS14 repository's root directory. The editor scans the `Resources/` folder for prototypes and textures. Works with base Space Station 14 or any fork.
-- **Use Built-in Resources**, If the editor is hosted with pre-bundled resources (e.g., a static deployment), this option loads them directly without needing a local folder. The button shows the built-in resource name (e.g., "Built-in", or a fork name if the build was pre-baked from a fork).
+After selecting a fork, the editor shows a summary of what was found (file counts, detected
+fork directories) and a "Load" button. Loading typically takes 2-15 seconds depending on
+fork size.
 
-After selecting a fork, the editor shows a summary of what was found (file counts, detected fork directories) and a "Load" button. Loading typically takes 2-15 seconds depending on fork size.
-
-**Browser compatibility:** Chrome and Edge use a native directory picker. Firefox and Safari use a folder upload input. All browsers support the full feature set.
-
-**Privacy:** All files are processed locally in your browser. Nothing is uploaded or sent to any server.
+**Privacy:** All files are read locally from the folder you pick. Nothing is uploaded or
+sent to any server.
 
 ### Switching Forks
 
-The active fork name is shown in the menu bar. Click it and select "Switch Fork..." to return to the fork selection screen. All editor state and caches are cleared when switching.
+The active fork name is shown in the menu bar. Click it and select "Switch Fork..." to
+return to the fork selection screen. All editor state and caches are cleared when switching.
 
-### Running Locally
+### Running
 
-1. Run `npm run dev` from the `Tools/map_creator/` directory
-2. Open the URL shown in the terminal (usually `http://localhost:5173`)
-3. Select your fork on the landing screen, or use built-in resources
+Grab a packaged build (Windows `.exe` or Linux `.AppImage`) from the releases page, or run
+from source: `npm run electron:dev` for the desktop shell, or `npm run dev` to run in a
+browser during development. Then pick your fork on the landing screen.
 
 ### Creating a Document
 
