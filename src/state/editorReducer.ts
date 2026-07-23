@@ -7,11 +7,49 @@ import type { GridData } from './gridData';
 import { createEmptyGridData, getActiveGrid } from './gridData';
 import { markSceneDirty, markAllDirty, markOverlayDirty, markConnectionsDirty } from '../rendering/dirtyFlags';
 import { rebuildSpatialIndex } from '../rendering/spatialIndex';
+import { setComponentField, addComponent, removeComponent } from './rawComponentPatch';
 
 const MAX_UNDO = 200;
 
 function isGridCommand(cmd: UndoableCommand): cmd is GridCommand {
   return 'type' in cmd && ['ADD_GRID', 'REMOVE_GRID', 'RENAME_GRID'].includes((cmd as GridCommand).type);
+}
+
+/** Mirror a MetaData name/desc edit into the parsed structural data.
+ * Empty strings remove the field, matching the raw-line patch. */
+function syncStructMetaData(
+  struct: Record<number, Record<string, unknown>[]> | undefined,
+  gridUid: number,
+  name: string,
+  desc: string,
+): Record<number, Record<string, unknown>[]> | undefined {
+  if (!struct?.[gridUid]) return struct;
+  const components = struct[gridUid].map(c => ({ ...c }));
+  let meta = components.find(c => c.type === 'MetaData');
+  if (!meta) {
+    meta = { type: 'MetaData' };
+    components.push(meta);
+  }
+  if (name.length > 0) meta.name = name; else delete meta.name;
+  if (desc.length > 0) meta.desc = desc; else delete meta.desc;
+  return { ...struct, [gridUid]: components };
+}
+
+/** Mirror a bare component add/remove into the parsed structural data. */
+function syncStructComponent(
+  struct: Record<number, Record<string, unknown>[]> | undefined,
+  gridUid: number,
+  componentType: string,
+  enabled: boolean,
+): Record<number, Record<string, unknown>[]> | undefined {
+  if (!struct?.[gridUid]) return struct;
+  const components = struct[gridUid];
+  const has = components.some(c => c.type === componentType);
+  if (enabled === has) return struct;
+  const next = enabled
+    ? [...components, { type: componentType }]
+    : components.filter(c => c.type !== componentType);
+  return { ...struct, [gridUid]: next };
 }
 
 /** Remove raw YAML lines for any entity touched by entity changes. */
@@ -628,6 +666,73 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         selectedDecalIds: [],
         decalsDirty: new Set(),
         dirty: false,
+      };
+    }
+
+    case 'SET_GRID_IDENTITY': {
+      const { gridUid } = action;
+      const name = action.name.trim();
+      const desc = action.desc.trim();
+      const raw = state.entityRawComponents?.[gridUid];
+      if (raw) {
+        // Imported document: patch the verbatim YAML so untouched lines keep
+        // byte parity, and mirror into the parsed structural data.
+        let patched = setComponentField(raw, 'MetaData', 'desc', desc.length > 0 ? desc : null);
+        patched = setComponentField(patched, 'MetaData', 'name', name.length > 0 ? name : null);
+        return {
+          ...state,
+          entityRawComponents: { ...state.entityRawComponents, [gridUid]: patched },
+          structuralEntityData: syncStructMetaData(state.structuralEntityData, gridUid, name, desc),
+          dirty: true,
+        };
+      }
+      if (state.structuralEntityData?.[gridUid]) {
+        return {
+          ...state,
+          structuralEntityData: syncStructMetaData(state.structuralEntityData, gridUid, name, desc),
+          dirty: true,
+        };
+      }
+      // From-scratch document: stash on the GridData; export synthesis emits it.
+      return {
+        ...state,
+        grids: state.grids.map(g => g.gridUid === gridUid
+          ? { ...g, identity: { name: name || undefined, desc: desc || undefined } }
+          : g),
+        dirty: true,
+      };
+    }
+
+    case 'SET_ROOT_COMPONENT': {
+      const { gridUid, componentType, enabled } = action;
+      const raw = state.entityRawComponents?.[gridUid];
+      if (raw) {
+        const patched = enabled ? addComponent(raw, componentType) : removeComponent(raw, componentType);
+        return {
+          ...state,
+          entityRawComponents: { ...state.entityRawComponents, [gridUid]: patched },
+          structuralEntityData: syncStructComponent(state.structuralEntityData, gridUid, componentType, enabled),
+          dirty: true,
+        };
+      }
+      if (state.structuralEntityData?.[gridUid]) {
+        return {
+          ...state,
+          structuralEntityData: syncStructComponent(state.structuralEntityData, gridUid, componentType, enabled),
+          dirty: true,
+        };
+      }
+      return {
+        ...state,
+        grids: state.grids.map(g => {
+          if (g.gridUid !== gridUid) return g;
+          const current = g.extraRootComponents ?? [];
+          const next = enabled
+            ? (current.includes(componentType) ? current : [...current, componentType])
+            : current.filter(t => t !== componentType);
+          return { ...g, extraRootComponents: next };
+        }),
+        dirty: true,
       };
     }
 

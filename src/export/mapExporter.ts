@@ -185,13 +185,21 @@ export function exportMap(map: ImportedMap, decalsDirty?: Set<number>): string {
     }
 
     const fallbackGrids = map.gridDataList && map.gridDataList.length > 0
-      ? map.gridDataList.map(g => ({ uid: g.gridUid, pos: g.worldPosition }))
-      : [{ uid: map.gridUid, pos: { x: 0, y: 0 } }];
+      ? map.gridDataList.map(g => ({
+          uid: g.gridUid,
+          pos: g.worldPosition,
+          identity: g.identity,
+          extraComponents: g.extraRootComponents ?? [],
+        }))
+      : [{ uid: map.gridUid, pos: { x: 0, y: 0 }, identity: undefined, extraComponents: [] as string[] }];
 
     for (const g of fallbackGrids) {
       lines.push(`  - uid: ${g.uid}`);
       lines.push('    components:');
       lines.push('    - type: MetaData');
+      // Identity set via Map Properties; fields alphabetical like the engine.
+      if (g.identity?.desc) lines.push(`      desc: ${formatPrimitive(g.identity.desc)}`);
+      if (g.identity?.name) lines.push(`      name: ${formatPrimitive(g.identity.name)}`);
       lines.push('    - type: Transform');
       if (g.pos.x !== 0 || g.pos.y !== 0) {
         lines.push(`      pos: ${g.pos.x},${g.pos.y}`);
@@ -207,6 +215,10 @@ export function exportMap(map: ImportedMap, decalsDirty?: Set<number>): string {
       const fallbackDecalLines = gridDecalsMap.get(g.uid);
       if (fallbackDecalLines) {
         for (const dl of fallbackDecalLines) lines.push(dl);
+      }
+      // Ship switches (Shuttle, IFF, ...) toggled via Map Properties.
+      for (const extra of g.extraComponents) {
+        lines.push(`    - type: ${extra}`);
       }
     }
   }
@@ -1048,7 +1060,7 @@ function isPrimitive(value: unknown): boolean {
   return value === null || value === undefined || typeof value !== 'object';
 }
 
-function formatPrimitive(value: unknown): string {
+export function formatPrimitive(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'boolean') return value ? 'True' : 'False';
   const str = String(value);

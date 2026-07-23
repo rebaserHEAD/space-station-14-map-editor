@@ -12,6 +12,13 @@ export interface GridData {
   structuralComponents: Record<string, unknown>[];
   chunkKeyOrder: string[];
   decals: GridDecalData;
+  /** MetaData name/desc for from-scratch documents (set via Map Properties).
+   * Imported documents carry identity in their raw component lines instead;
+   * the exporter only reads this when there is no raw data to preserve. */
+  identity?: { name?: string; desc?: string };
+  /** Bare marker components (e.g. Shuttle, IFF) for from-scratch documents,
+   * emitted onto the grid root by the export synthesis fallback. */
+  extraRootComponents?: string[];
 }
 
 export function createEmptyGridData(uid: number, name: string): GridData {

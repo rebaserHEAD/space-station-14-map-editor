@@ -1,7 +1,7 @@
 import React, { useReducer, useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import type { ToolType, PaletteItem } from './types';
 import { editorReducer } from './state/editorReducer';
-import { createInitialState, ensureGridContainsBounds, getDocumentKind } from './state/editorState';
+import { createInitialState, ensureGridContainsBounds, getDocumentKind, getGridProperties } from './state/editorState';
 import type { ITool } from './tools/toolTypes';
 import { PaintTool } from './tools/paintTool';
 import { EraseTool } from './tools/eraseTool';
@@ -28,6 +28,7 @@ import type { DecalPlacementSettings } from './components/DecalPalette';
 import { EntityInfoPanel } from './components/EntityInfoPanel';
 import { DecalInfoPanel } from './components/DecalInfoPanel';
 import { MenuBar } from './components/MenuBar';
+import { MapPropertiesModal } from './components/MapPropertiesModal';
 import { StatusBar } from './components/StatusBar';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LayerPanel } from './components/LayerPanel';
@@ -105,6 +106,7 @@ export const App: React.FC = () => {
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({ ...DEFAULT_LAYER_VISIBILITY });
   const [pendingDeleteGridUid, setPendingDeleteGridUid] = useState<number | null>(null);
   const [validatorIssues, setValidatorIssues] = useState<ValidationIssue[] | null>(null);
+  const [showMapProperties, setShowMapProperties] = useState(false);
   const [highlightTile, setHighlightTile] = useState<{ x: number; y: number; startTime: number } | null>(null);
   const [infraSelection, setInfraSelection] = useState<InfrastructureSelection>({
     mode: 'cable', cableType: 'CableHV', pipeType: 'supply',
@@ -332,6 +334,7 @@ export const App: React.FC = () => {
       case 'file:newGrid':
         if (!state.dirty || window.confirm('Unsaved changes will be lost. Continue?')) handleNewGrid();
         break;
+      case 'file:properties': setShowMapProperties(true); break;
       case 'file:import': handleImportNative(); break;
       case 'file:export': handleExport(); break;
       case 'edit:undo': handleUndo(); break;
@@ -689,6 +692,22 @@ export const App: React.FC = () => {
           />
         );
       })()}
+      {showMapProperties && (() => {
+        const propsGridUid = state.grids[state.activeGridIndex]?.gridUid ?? state.gridUid;
+        return (
+          <MapPropertiesModal
+            documentKind={getDocumentKind(state)}
+            meta={state.meta}
+            gridUid={propsGridUid}
+            gridProperties={getGridProperties(state, propsGridUid)}
+            onSetIdentity={(name, desc) =>
+              dispatch({ type: 'SET_GRID_IDENTITY', gridUid: propsGridUid, name, desc })}
+            onToggleComponent={(componentType, enabled) =>
+              dispatch({ type: 'SET_ROOT_COMPONENT', gridUid: propsGridUid, componentType, enabled })}
+            onClose={() => setShowMapProperties(false)}
+          />
+        );
+      })()}
       {validatorIssues !== null && (
         <ValidatorModal
           issues={validatorIssues}
@@ -700,6 +719,7 @@ export const App: React.FC = () => {
         onNewMap={handleNewMap}
         onNewGrid={handleNewGrid}
         documentKind={getDocumentKind(state)}
+        onShowMapProperties={() => setShowMapProperties(true)}
         onImport={handleImport}
         onExport={handleExport}
         onUndo={handleUndo}

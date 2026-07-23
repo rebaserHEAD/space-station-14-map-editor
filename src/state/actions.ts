@@ -11,6 +11,8 @@ export type EditorAction =
   | { type: 'LOAD_MAP'; map: ImportedMap }
   | { type: 'NEW_MAP' }
   | { type: 'NEW_GRID' }
+  | { type: 'SET_GRID_IDENTITY'; gridUid: number; name: string; desc: string }
+  | { type: 'SET_ROOT_COMPONENT'; gridUid: number; componentType: string; enabled: boolean }
   | { type: 'SET_REGISTRY'; registry: IPrototypeRegistry | null }
   | { type: 'SELECT_ENTITY'; uids: number[] }
   | { type: 'TOGGLE_SELECT_ENTITY'; uid: number }
